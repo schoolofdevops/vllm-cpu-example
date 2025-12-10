@@ -227,7 +227,10 @@ with gr.Blocks(title="vLLM Chatbot") as demo:
                     yield new_history + [{"role": "assistant", "content": response}]
 
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
+            # Log error to console for debugging
+            print(f"ERROR: {type(e).__name__}: {str(e)}")
+            # Provide helpful error message to user
+            error_msg = f"Connection Error: {str(e)}\n\nPlease check:\n1. vLLM is running: docker compose ps\n2. API endpoint: {VLLM_BASE_URL}"
             new_history = history + [{"role": "user", "content": message}]
             yield new_history + [{"role": "assistant", "content": error_msg}]
 

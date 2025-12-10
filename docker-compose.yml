@@ -94,7 +94,8 @@ services:
       - MODEL_NAME=${MODEL_NAME:-HuggingFaceTB/SmolLM2-360M-Instruct}
 
     depends_on:
-      - vllm-cpu
+      vllm-cpu:
+        condition: service_healthy
 
     restart: unless-stopped
 
