@@ -1,0 +1,124 @@
+services:
+  vllm-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vllm-cpu-optimized:latest
+    container_name: vllm-smollm2
+
+    # Command to serve the model (arguments passed to the entrypoint)
+    command:
+      - --model
+      - ${MODEL_NAME:-HuggingFaceTB/SmolLM2-360M-Instruct}
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --dtype
+      - ${DTYPE:-auto}
+      - --max-model-len
+      - ${MAX_MODEL_LEN:-2048}
+      - --max-num-seqs
+      - ${MAX_NUM_SEQS:-8}
+      - --tensor-parallel-size
+      - "1"
+      - --pipeline-parallel-size
+      - "1"
+      - --disable-log-requests
+      - --trust-remote-code
+
+    ports:
+      - "${VLLM_PORT:-8009}:8000"
+
+    environment:
+      # vLLM CPU-specific settings (inherited from Dockerfile)
+      - VLLM_TARGET_DEVICE=cpu
+      - VLLM_CPU_KVCACHE_SPACE=${KVCACHE_SPACE:-1}
+
+      # Thread control for optimal CPU performance
+      - OMP_NUM_THREADS=${OMP_THREADS:-2}
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+
+      # HuggingFace settings
+      - HF_HOME=/workspace/.cache/huggingface
+      - TRANSFORMERS_CACHE=/workspace/.cache/huggingface
+
+      # Optional: HuggingFace token for gated models
+      # - HF_TOKEN=${HF_TOKEN}
+
+    volumes:
+      # Cache HuggingFace models to avoid re-downloading
+      - hf-cache:/workspace/.cache/huggingface
+      # Optional: Mount local models directory
+      # - ./models:/workspace/models:ro
+
+    # Resource limits optimized for macOS
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-4.0}'
+          memory: ${MEMORY_LIMIT:-8G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-2.0}'
+          memory: ${MEMORY_RESERVATION:-4G}
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Network configuration
+    networks:
+      - vllm-network
+
+  # Gradio Chatbot Interface
+  chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile.chatbot
+    image: vllm-chatbot:latest
+    container_name: vllm-chatbot
+
+    ports:
+      - "7860:7860"
+
+    environment:
+      - VLLM_BASE_URL=http://vllm-cpu:8000/v1
+      - MODEL_NAME=${MODEL_NAME:-HuggingFaceTB/SmolLM2-360M-Instruct}
+
+    depends_on:
+      - vllm-cpu
+
+    restart: unless-stopped
+
+    networks:
+      - vllm-network
+
+  # Optional: Simple web UI for testing (uncomment to enable)
+  # webui:
+  #   image: ghcr.io/open-webui/open-webui:main
+  #   container_name: vllm-webui
+  #   ports:
+  #     - "3000:8080"
+  #   environment:
+  #     - OPENAI_API_BASE=http://vllm-cpu:8000/v1
+  #     - OPENAI_API_KEY=dummy
+  #   depends_on:
+  #     - vllm-cpu
+  #   networks:
+  #     - vllm-network
+
+volumes:
+  hf-cache:
+    driver: local
+
+networks:
+  vllm-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+# vLLM CPU image you pulled
+FROM openeuler/vllm-cpu:0.9.1-oe2403lts
+
+# Remove Python NUMA binding so vLLM skips NUMA code paths
+RUN pip uninstall -y numa || true
+
+# Sensible CPU defaults (tweak as you like)
+ENV VLLM_TARGET_DEVICE=cpu \
+    VLLM_CPU_KVCACHE_SPACE=1 \
+    OMP_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 
+
+# Keep the original ENTRYPOINT (the image already starts the OpenAI server)
+# No CMD/ENTRYPOINT override needed here.
